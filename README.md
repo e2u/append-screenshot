@@ -13,5 +13,3 @@ append-screenshot -output=1.png -input=./images/IMG_8529.PNG,./images/IMG_8530.P
 ```
 
 
-
-# append-screenshot
