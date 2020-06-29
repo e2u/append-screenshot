@@ -45,7 +45,7 @@ func main() {
 
 	imageFiles := strings.Split(inputFiles, ",")
 
-	_ = filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(dirPath(inputDir), func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
 			return nil
 		}
@@ -268,4 +268,19 @@ func convertImageToNRGBA64(img image.Image) *image.NRGBA64 {
 	m := image.NewNRGBA64(img.Bounds())
 	draw.Draw(m, m.Bounds(), img, img.Bounds().Min, draw.Src)
 	return m
+}
+
+func dirPath(inputDir string) string {
+	if strings.HasPrefix(strings.TrimSpace(inputDir), "~/") {
+		h, err := os.UserHomeDir()
+		if err == nil {
+			ap, err := filepath.Abs(filepath.Join(h, strings.Replace(inputDir, "~", "", 1)))
+			if err != nil {
+				return inputDir
+			}
+			return ap
+		}
+		return inputDir
+	}
+	return inputDir
 }
