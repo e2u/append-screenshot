@@ -2,8 +2,6 @@ package main
 
 import (
 	"flag"
-	"github.com/e2u/e2util/e2env"
-	"github.com/sirupsen/logrus"
 	"image"
 	"image/draw"
 	_ "image/jpeg"
@@ -13,6 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/e2u/e2util/e2env"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -23,9 +24,9 @@ var (
 )
 
 const (
-	// 某行(y)的純色和非純色的比例阈值，用 impure / pure 得到,如果小於 colorThreshold 設定，則這行還算是純黑色
+	// 某行(y)的純色和非純色的比例阈值，用 impure / pure 得到,如果小於 colorThreshold 設定，則這行還算是純色
 	colorThreshold = 1.0
-	// 連續多少行黑色比例不才不算邊框,比如某行的黑色和非黑色的比例大與 colorThreshold
+	// 連續多少行黑色比例不才不算邊框,比如某行的純色和非純色的比例大與 colorThreshold
 	borderThreshold = 15
 )
 
@@ -44,7 +45,7 @@ func main() {
 
 	imageFiles := strings.Split(inputFiles, ",")
 
-	filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(inputDir, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
 			return nil
 		}
@@ -84,7 +85,7 @@ func main() {
 	}
 
 	outImage := appendImages(colNum, srcImages...)
-	png.Encode(outFile, outImage)
+	_ = png.Encode(outFile, outImage)
 }
 
 // append 圖片拼接,按順序拼接多張圖片
