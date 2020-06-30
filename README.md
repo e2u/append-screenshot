@@ -9,7 +9,9 @@
 ## 用法
 
 ```shell script
-append-screenshot -output=1.png -input=./images/IMG_8529.PNG,./images/IMG_8530.PNG,./images/IMG_8531.PNG,./images/IMG_8532.PNG,./images/IMG_8533.PNG,./images/IMG_8534.PNG,./images/IMG_8535.PNG -col=2
+append-screenshot -col=2 -output=1.png -input=./images/IMG_8529.PNG,./images/IMG_8530.PNG,./images/IMG_8531.PNG,./images/IMG_8532.PNG,./images/IMG_8533.PNG,./images/IMG_8534.PNG,./images/IMG_8535.PNG
+
+append-screenshot -col=2 -output=1.png -input-dir=./images/
 ```
 
 

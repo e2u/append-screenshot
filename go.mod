@@ -6,4 +6,5 @@ require (
 	github.com/e2u/e2util v0.0.0-20200617054010-a60d8e5a0890
 	github.com/sirupsen/logrus v1.6.0
 	gocv.io/x/gocv v0.23.0 // indirect
+	golang.org/x/image v0.0.0-20200618115811-c13761719519
 )

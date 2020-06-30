@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	_ "image/jpeg"
 	"image/png"
@@ -11,6 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/inconsolata"
+	"golang.org/x/image/math/fixed"
 
 	"github.com/e2u/e2util/e2env"
 	"github.com/sirupsen/logrus"
@@ -26,7 +32,7 @@ var (
 const (
 	// 某行(y)的純色和非純色的比例阈值，用 impure / pure 得到,如果小於 colorThreshold 設定，則這行還算是純色
 	colorThreshold = 1.0
-	// 連續多少行黑色比例不才不算邊框,比如某行的純色和非純色的比例大與 colorThreshold
+	// 連續多少行純色比例不才不算邊框,比如某行的純色和非純色的比例大與 colorThreshold
 	borderThreshold = 15
 )
 
@@ -44,18 +50,19 @@ func main() {
 	}
 
 	imageFiles := strings.Split(inputFiles, ",")
-
-	_ = filepath.Walk(dirPath(inputDir), func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-		exName := strings.ToLower(filepath.Ext(path))
-		switch exName {
-		case ".gif", ".png", ".jpg", ".jpeg", ".bmp":
-			imageFiles = append(imageFiles, path)
-		}
-		return err
-	})
+	if len(inputDir) > 0 {
+		_ = filepath.Walk(dirPath(inputDir), func(path string, info os.FileInfo, err error) error {
+			if info.IsDir() {
+				return nil
+			}
+			exName := strings.ToLower(filepath.Ext(path))
+			switch exName {
+			case ".gif", ".png", ".jpg", ".jpeg", ".bmp":
+				imageFiles = append(imageFiles, path)
+			}
+			return err
+		})
+	}
 
 	if len(imageFiles) == 0 {
 		log.Fatal("input files can't not be empty")
@@ -65,13 +72,7 @@ func main() {
 		colNum = 1
 	}
 
-	outFile, err := os.Create(outputFile)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer outFile.Close()
-
-	var srcImages []image.Image
+	var srcImages []*image.NRGBA64
 	for idx := range imageFiles {
 		if strings.TrimSpace(imageFiles[idx]) == "" {
 			continue
@@ -80,11 +81,16 @@ func main() {
 		if err != nil {
 			logrus.Fatal(err.Error())
 		}
-		//srcImages = append(srcImages, corpImageFR(si))
 		srcImages = append(srcImages, corpImageF(si))
 	}
-
+	// 拼接圖片
 	outImage := appendImages(colNum, srcImages...)
+	// 輸出圖片
+	outFile, err := os.Create(dirPath(outputFile))
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	defer outFile.Close()
 	_ = png.Encode(outFile, outImage)
 }
 
@@ -94,7 +100,7 @@ func main() {
 // 圖片數量 / colNum 作為圖片的高
 // 生成底圖後，按順序將圖片貼到底圖輸出
 // colNum: 沒行有幾張圖片
-func appendImages(colNum int, images ...image.Image) image.Image {
+func appendImages(colNum int, images ...*image.NRGBA64) *image.NRGBA64 {
 	var maxWidth, maxHeight int
 	// 找到圖片裡的最寬和最高值
 	for idx := range images {
@@ -112,15 +118,24 @@ func appendImages(colNum int, images ...image.Image) image.Image {
 
 	// 計算出底圖尺寸並準備好底圖
 	destWidth, destHeight := maxWidth*colNum, maxHeight*rowNum
-	outImage := image.NewNRGBA64(image.Rectangle{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: destWidth, Y: destHeight}})
+	outImage := image.NewNRGBA64(
+		image.Rectangle{
+			Min: image.Point{X: 0, Y: 0},
+			Max: image.Point{X: destWidth, Y: destHeight},
+		},
+	)
 	// 按順序將圖片貼到底圖上，每次位移用最大尺寸
 
 	var currX, currY int // 當前底圖的左上角
 	for idx := range images {
 		img := images[idx]
+		addLabel(img, 10, 15, fmt.Sprintf("%02d", idx+1))
 		draw.Draw(
 			outImage,
-			image.Rectangle{Min: image.Point{X: currX, Y: currY}, Max: image.Point{X: currX + img.Bounds().Max.X, Y: currY + img.Bounds().Max.Y}},
+			image.Rectangle{
+				Min: image.Point{X: currX, Y: currY},
+				Max: image.Point{X: currX + img.Bounds().Max.X, Y: currY + img.Bounds().Max.Y},
+			},
 			img,
 			image.Point{X: 0, Y: 0},
 			draw.Src,
@@ -135,30 +150,27 @@ func appendImages(colNum int, images ...image.Image) image.Image {
 }
 
 // calcRowColorRate 按行計算圖片的純色和非純色的比例
-func calcRowColorRate(srcImage image.Image) []float64 {
+func calcRowColorRate(srcImage *image.NRGBA64) []float64 {
 	srcWidth, rscHeight := srcImage.Bounds().Max.X, srcImage.Bounds().Max.Y
 	// 存儲所有行的純色和非純的比例
 	var rows []float64
-	for h := 0; h <= rscHeight; h++ {
+	for y := 0; y <= rscHeight; y++ {
 		var pure, impure int
-		for w := 0; w <= srcWidth; w++ {
-			r, g, b, _ := srcImage.At(w, h).RGBA()
+		for x := 0; x <= srcWidth; x++ {
+			r, g, b, _ := srcImage.At(x, y).RGBA()
 			if r == g && r == b {
 				pure++
 			} else {
 				impure++
 			}
-
 		}
-		// logrus.Infof("pure=%v,impure=%v,rate=%v", pure, impure, float64(impure)/float64(pure))
 		rows = append(rows, float64(impure)/float64(pure))
 	}
-
 	return rows
 }
 
 // corpImageF 單向查找邊框
-func corpImageF(srcImage image.Image) image.Image {
+func corpImageF(srcImage *image.NRGBA64) *image.NRGBA64 {
 	rows := calcRowColorRate(srcImage)
 	// 分別獲取前導邊框的結束行和後導邊框的開始行，中間的就是需要截取的圖片
 	var borderForwardBegin, borderForwardEnd, counter int
@@ -170,7 +182,7 @@ func corpImageF(srcImage image.Image) image.Image {
 			counter = 0
 		}
 		// 找到開始行
-		if counter >= borderThreshold {
+		if counter > borderThreshold {
 			borderForwardBegin = idx - borderThreshold
 			break
 		}
@@ -209,47 +221,9 @@ func corpImageF(srcImage image.Image) image.Image {
 	return outImage
 }
 
-// corpImageFR 從源圖片截取部分並輸出,自動截取
-// 雙向查找
-func corpImageFR(srcImage image.Image) image.Image {
-	rows := calcRowColorRate(srcImage)
-	// 分別獲取前導邊框的結束行和後導邊框的開始行，中間的就是需要截取的圖片
-	var borderForwardEnd, counter int
-	for idx := range rows {
-		if rows[idx] > colorThreshold {
-			counter++
-		} else {
-			counter = 0
-		}
-		if counter >= borderThreshold {
-			borderForwardEnd = idx - borderThreshold
-			break
-		}
-	}
-	var borderBackwardBegin int
-	for idx := len(rows) - 1; idx > 0; idx-- {
-		if rows[idx] > colorThreshold {
-			counter++
-		} else {
-			counter = 0
-		}
-		if counter >= borderThreshold {
-			borderBackwardBegin = idx + borderThreshold
-			break
-		}
-	}
-	// 計算出截取後的圖片尺寸
-	srcWidth := srcImage.Bounds().Max.X
-	cropImageWidth, cropImageHeight := srcWidth, borderBackwardBegin-borderForwardEnd
-	// 輸出最終圖片
-	outImage := image.NewNRGBA64(image.Rectangle{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: cropImageWidth, Y: cropImageHeight}})
-	draw.Draw(outImage, outImage.Bounds(), srcImage, image.Point{X: 0, Y: borderForwardEnd}, draw.Src)
-	return outImage
-}
-
 // readImageFile 讀取圖片文件
 func readImageFile(file string) (*image.NRGBA64, error) {
-	f, err := os.Open(strings.TrimSpace(file))
+	f, err := os.Open(dirPath(file))
 	if err != nil {
 		return nil, err
 	}
@@ -271,16 +245,29 @@ func convertImageToNRGBA64(img image.Image) *image.NRGBA64 {
 }
 
 func dirPath(inputDir string) string {
-	if strings.HasPrefix(strings.TrimSpace(inputDir), "~/") {
-		h, err := os.UserHomeDir()
-		if err == nil {
-			ap, err := filepath.Abs(filepath.Join(h, strings.Replace(inputDir, "~", "", 1)))
-			if err != nil {
-				return inputDir
-			}
-			return ap
-		}
+	if !strings.HasPrefix(strings.TrimSpace(inputDir), "~/") {
 		return inputDir
 	}
-	return inputDir
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return inputDir
+	}
+	ap, err := filepath.Abs(filepath.Join(h, strings.Replace(inputDir, "~", "", 1)))
+	if err != nil {
+		return inputDir
+	}
+	return ap
+}
+
+// 在圖片上添加文字
+func addLabel(img *image.NRGBA64, x, y int, label string) {
+	col := color.RGBA{R: 200, G: 100, B: 0, A: 255}
+	point := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(col),
+		Face: inconsolata.Regular8x16,
+		Dot:  point,
+	}
+	d.DrawString(label)
 }
