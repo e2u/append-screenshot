@@ -204,12 +204,21 @@ func corpImageF(srcImage *image.NRGBA64) *image.NRGBA64 {
 			break
 		}
 	}
+	if borderForwardEnd < 0 {
+		borderForwardEnd = srcImage.Bounds().Max.Y
+	}
 
-	// logrus.Infof("border forward begin=%v,end=%v", borderForwardBegin, borderForwardEnd)
+	logrus.Infof("border forward begin=%v,end=%v", borderForwardBegin, borderForwardEnd)
 	// 計算出截取後的圖片尺寸
 	srcWidth := srcImage.Bounds().Max.X
 	cropImageWidth, cropImageHeight := srcWidth, borderForwardEnd-borderForwardBegin
-	// logrus.Infof("crop width=%v,crop height=%v",cropImageWidth,cropImageHeight)
+	//logrus.Infof("crop width=%v,crop height=%v",cropImageWidth,cropImageHeight)
+	//if cropImageWidth < 0 {
+	//	cropImageWidth = srcWidth
+	//}
+	//if cropImageHeight < 0 {
+	//	cropImageHeight = srcImage.Bounds().Max.Y
+	//}
 	// 輸出最終圖片
 	outImage := image.NewNRGBA64(
 		image.Rectangle{
